@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.js.map
+
+# Real config with credentials — never commit this
+config/connections.json
+
+# SSH keys
+*.pem
+*.key
+id_rsa
+id_ed25519
+
+.env
+.env.local

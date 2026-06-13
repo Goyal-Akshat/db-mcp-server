@@ -1,0 +1,94 @@
+{
+  "environments": {
+    "local": {
+      "environment": "local",
+      "connections": {
+        "main-postgres": {
+          "kind": "postgres",
+          "host": "127.0.0.1",
+          "port": 5432,
+          "database": "myapp_dev",
+          "user": "postgres",
+          "password": "password",
+          "ssl": false
+        },
+        "main-mongo": {
+          "kind": "mongodb",
+          "uri": "mongodb://localhost:27017/myapp",
+          "database": "myapp"
+        },
+        "cache": {
+          "kind": "redis",
+          "host": "127.0.0.1",
+          "port": 6379
+        }
+      }
+    },
+    "dev": {
+      "environment": "dev",
+      "ssh": {
+        "host": "dev-bastion.example.com",
+        "port": 22,
+        "username": "ubuntu",
+        "privateKey": "~/.ssh/dev_bastion_key",
+        "privateKeyIsPath": true
+      },
+      "connections": {
+        "main-postgres": {
+          "kind": "postgres",
+          "host": "dev-rds.internal.example.com",
+          "port": 5432,
+          "database": "myapp_dev",
+          "user": "myapp_user",
+          "password": "CHANGE_ME",
+          "ssl": true
+        },
+        "main-mongo": {
+          "kind": "mongodb",
+          "uri": "mongodb://myapp_user:CHANGE_ME@dev-mongo.internal.example.com:27017/myapp",
+          "database": "myapp"
+        },
+        "cache": {
+          "kind": "redis",
+          "host": "dev-redis.internal.example.com",
+          "port": 6379,
+          "password": "CHANGE_ME",
+          "tls": true
+        }
+      }
+    },
+    "prod": {
+      "environment": "prod",
+      "ssh": {
+        "host": "prod-bastion.example.com",
+        "port": 22,
+        "username": "ubuntu",
+        "privateKey": "~/.ssh/prod_bastion_key",
+        "privateKeyIsPath": true
+      },
+      "connections": {
+        "main-postgres": {
+          "kind": "postgres",
+          "host": "prod-rds.internal.example.com",
+          "port": 5432,
+          "database": "myapp_prod",
+          "user": "myapp_user",
+          "password": "CHANGE_ME",
+          "ssl": true
+        },
+        "main-mongo": {
+          "kind": "mongodb",
+          "uri": "mongodb://myapp_user:CHANGE_ME@prod-mongo.internal.example.com:27017/myapp",
+          "database": "myapp"
+        },
+        "cache": {
+          "kind": "redis",
+          "host": "prod-redis.internal.example.com",
+          "port": 6379,
+          "password": "CHANGE_ME",
+          "tls": true
+        }
+      }
+    }
+  }
+}
