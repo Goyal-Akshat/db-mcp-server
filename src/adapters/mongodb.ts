@@ -1,8 +1,8 @@
 import { MongoClient, Db, Document } from "mongodb";
-import { BaseAdapter } from "./base.js";
-import { Environment, MongoConnection, QueryResult } from "../types/index.js";
+import { Environment, MongoConfig, QueryResult } from "../types/index.js";
+import { DatabaseAdapter } from "./dbAdapter.js";
 
-export class MongoAdapter extends BaseAdapter {
+export class MongoAdapter extends DatabaseAdapter {
   readonly kind = "mongodb" as const;
   private client: MongoClient | null = null;
   private db: Db | null = null;
@@ -10,7 +10,7 @@ export class MongoAdapter extends BaseAdapter {
   constructor(
     connectionName: string,
     environment: Environment,
-    private readonly config: MongoConnection & { uri: string }
+    private readonly config: MongoConfig & { uri: string },
   ) {
     super(connectionName, environment);
   }
@@ -53,11 +53,16 @@ export class MongoAdapter extends BaseAdapter {
    *   "listCollections" params: []
    */
   async executeRaw(operation: string, params: unknown[]): Promise<QueryResult> {
-    if (!this.db) throw new Error(`[mongodb:${this.connectionName}] Not connected`);
+    if (!this.db)
+      throw new Error(`[mongodb:${this.connectionName}] Not connected`);
 
     switch (operation) {
       case "find": {
-        const [col, filter = {}, options = {}] = params as [string, Document, Document];
+        const [col, filter = {}, options = {}] = params as [
+          string,
+          Document,
+          Document,
+        ];
         const rows = await this.db
           .collection(col)
           .find(filter, options as object)
@@ -68,7 +73,10 @@ export class MongoAdapter extends BaseAdapter {
 
       case "aggregate": {
         const [col, pipeline] = params as [string, Document[]];
-        const rows = await this.db.collection(col).aggregate(pipeline).toArray();
+        const rows = await this.db
+          .collection(col)
+          .aggregate(pipeline)
+          .toArray();
         return { rows, rowCount: rows.length };
       }
 
@@ -86,17 +94,27 @@ export class MongoAdapter extends BaseAdapter {
 
       case "updateOne": {
         const [col, filter, update, options = {}] = params as [
-          string, Document, Document, Document
+          string,
+          Document,
+          Document,
+          Document,
         ];
-        const result = await this.db.collection(col).updateOne(filter, update, options);
+        const result = await this.db
+          .collection(col)
+          .updateOne(filter, update, options);
         return { raw: result, rowCount: result.modifiedCount };
       }
 
       case "updateMany": {
         const [col, filter, update, options = {}] = params as [
-          string, Document, Document, Document
+          string,
+          Document,
+          Document,
+          Document,
         ];
-        const result = await this.db.collection(col).updateMany(filter, update, options);
+        const result = await this.db
+          .collection(col)
+          .updateMany(filter, update, options);
         return { raw: result, rowCount: result.modifiedCount };
       }
 

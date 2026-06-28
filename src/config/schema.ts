@@ -10,7 +10,6 @@ const SshConfigSchema = z.object({
 });
 
 const PostgresConnectionSchema = z.object({
-  kind: z.literal("postgres"),
   host: z.string(),
   port: z.number().default(5432),
   database: z.string(),
@@ -20,13 +19,11 @@ const PostgresConnectionSchema = z.object({
 });
 
 const MongoConnectionSchema = z.object({
-  kind: z.literal("mongodb"),
   uri: z.string(),
   database: z.string(),
 });
 
 const RedisConnectionSchema = z.object({
-  kind: z.literal("redis"),
   host: z.string(),
   port: z.number().default(6379),
   password: z.string().optional(),
@@ -34,29 +31,35 @@ const RedisConnectionSchema = z.object({
   tls: z.boolean().default(false),
 });
 
-const DatabaseConnectionSchema = z.discriminatedUnion("kind", [
-  PostgresConnectionSchema,
-  MongoConnectionSchema,
-  RedisConnectionSchema,
+const ConfigSchema = z.discriminatedUnion("kind", [
+  z.object({
+    connectionName: z.string(),
+    environment: z.enum(["local", "dev", "prod"]),
+    kind: z.literal("postgres"),
+    requireSsh: z.boolean().default(false),
+    sshConfig: SshConfigSchema.optional(),
+    dbConfig: PostgresConnectionSchema,
+  }),
+
+  z.object({
+    connectionName: z.string(),
+    environment: z.enum(["local", "dev", "prod"]),
+    kind: z.literal("mongo"),
+    requireSsh: z.boolean().default(false),
+    sshConfig: SshConfigSchema.optional(),
+    dbConfig: MongoConnectionSchema,
+  }),
+
+  z.object({
+    connectionName: z.string(),
+    environment: z.enum(["local", "dev", "prod"]),
+    kind: z.literal("redis"),
+    requireSsh: z.boolean().default(false),
+    sshConfig: SshConfigSchema.optional(),
+    dbConfig: RedisConnectionSchema,
+  }),
 ]);
 
-const EnvironmentEntrySchema = z
-  .object({
-    environment: z.enum(["local", "dev", "prod"]),
-    ssh: SshConfigSchema.optional(),
-    connections: z.record(DatabaseConnectionSchema),
-  })
-  .superRefine((val, ctx) => {
-    if (val.environment !== "local" && !val.ssh) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `SSH config is required for environment "${val.environment}"`,
-      });
-    }
-  });
-
-export const AppConfigSchema = z.object({
-  environments: z.record(EnvironmentEntrySchema),
-});
+export const AppConfigSchema = z.array(ConfigSchema);
 
 export type ValidatedConfig = z.infer<typeof AppConfigSchema>;

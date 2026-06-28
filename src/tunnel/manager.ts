@@ -12,18 +12,22 @@ interface TunnelEntry {
 /** Singleton map: tunnelKey → active tunnel server */
 const activeTunnels = new Map<string, TunnelEntry>();
 
-function tunnelKey(ssh: SshConfig, remoteHost: string, remotePort: number): string {
+function tunnelKey(
+  ssh: SshConfig,
+  remoteHost: string,
+  remotePort: number,
+): string {
   return `${ssh.host}:${ssh.port}→${remoteHost}:${remotePort}`;
 }
 
-function resolvePrivateKey(ssh: SshConfig): Buffer {
-  if (ssh.privateKeyIsPath) {
-    const resolved = ssh.privateKey.startsWith("~")
-      ? ssh.privateKey.replace("~", process.env.HOME ?? "")
-      : ssh.privateKey;
+function resolvePrivateKey(config: SshConfig): Buffer {
+  if (config.privateKeyIsPath) {
+    const resolved = config.privateKey.startsWith("~")
+      ? config.privateKey.replace("~", process.env.HOME ?? "")
+      : config.privateKey;
     return fs.readFileSync(resolved);
   }
-  return Buffer.from(ssh.privateKey);
+  return Buffer.from(config.privateKey);
 }
 
 function findFreePort(): Promise<number> {
@@ -42,11 +46,11 @@ function findFreePort(): Promise<number> {
  * Returns the local port you should connect to instead.
  */
 export async function openTunnel(
-  ssh: SshConfig,
+  config: SshConfig,
   remoteHost: string,
-  remotePort: number
+  remotePort: number,
 ): Promise<number> {
-  const key = tunnelKey(ssh, remoteHost, remotePort);
+  const key = tunnelKey(config, remoteHost, remotePort);
 
   const existing = activeTunnels.get(key);
   if (existing) {
@@ -55,14 +59,14 @@ export async function openTunnel(
   }
 
   const localPort = await findFreePort();
-  const privateKey = resolvePrivateKey(ssh);
+  const privateKey = resolvePrivateKey(config);
 
   const sshOptions = {
-    host: ssh.host,
-    port: ssh.port,
-    username: ssh.username,
+    host: config.host,
+    port: config.port,
+    username: config.username,
     privateKey,
-    passphrase: ssh.passphrase,
+    passphrase: config.passphrase,
   };
 
   const forwardOptions = {
@@ -76,7 +80,7 @@ export async function openTunnel(
     { autoClose: false, reconnectOnError: false },
     { port: localPort, host: "127.0.0.1" },
     sshOptions,
-    forwardOptions
+    forwardOptions,
   );
 
   activeTunnels.set(key, { server, localPort, refCount: 1 });
@@ -91,7 +95,7 @@ export async function openTunnel(
 export async function closeTunnel(
   ssh: SshConfig,
   remoteHost: string,
-  remotePort: number
+  remotePort: number,
 ): Promise<void> {
   const key = tunnelKey(ssh, remoteHost, remotePort);
   const entry = activeTunnels.get(key);
@@ -110,8 +114,8 @@ export async function closeAllTunnels(): Promise<void> {
   await Promise.all(
     entries.map(
       ([, entry]) =>
-        new Promise<void>((resolve) => entry.server.close(() => resolve()))
-    )
+        new Promise<void>((resolve) => entry.server.close(() => resolve())),
+    ),
   );
   activeTunnels.clear();
   console.error("[tunnel] All tunnels closed");

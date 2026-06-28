@@ -15,16 +15,18 @@ export const mongoToolDefs: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        env: { type: "string" },
-        connection: { type: "string" },
+        connectionName: { type: "string" },
         collection: { type: "string" },
-        filter: { type: "object", description: "MongoDB filter document (default: {})" },
+        filter: {
+          type: "object",
+          description: "MongoDB filter document (default: {})",
+        },
         options: {
           type: "object",
           description: "Query options: { projection, sort, limit }",
         },
       },
-      required: ["env", "connection", "collection"],
+      required: ["connectionName", "collection"],
     },
   },
   {
@@ -33,12 +35,14 @@ export const mongoToolDefs: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        env: { type: "string" },
-        connection: { type: "string" },
+        connectionName: { type: "string" },
         collection: { type: "string" },
-        pipeline: { type: "array", description: "Array of aggregation stage documents" },
+        pipeline: {
+          type: "array",
+          description: "Array of aggregation stage documents",
+        },
       },
-      required: ["env", "connection", "collection", "pipeline"],
+      required: ["connectionName", "collection", "pipeline"],
     },
   },
   {
@@ -49,15 +53,15 @@ export const mongoToolDefs: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        env: { type: "string" },
-        connection: { type: "string" },
+        connectionName: { type: "string" },
         collection: { type: "string" },
         documents: {
           type: "array",
-          description: "Documents to insert (single-element array for insertOne)",
+          description:
+            "Documents to insert (single-element array for insertOne)",
         },
       },
-      required: ["env", "connection", "collection", "documents"],
+      required: ["connectionName", "collection", "documents"],
     },
   },
   {
@@ -68,14 +72,19 @@ export const mongoToolDefs: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        env: { type: "string" },
-        connection: { type: "string" },
+        connectionName: { type: "string" },
         collection: { type: "string" },
         filter: { type: "object" },
-        update: { type: "object", description: "Update document (e.g. { $set: { ... } })" },
-        many: { type: "boolean", description: "If true, updateMany; else updateOne" },
+        update: {
+          type: "object",
+          description: "Update document (e.g. { $set: { ... } })",
+        },
+        many: {
+          type: "boolean",
+          description: "If true, updateMany; else updateOne",
+        },
       },
-      required: ["env", "connection", "collection", "filter", "update"],
+      required: ["connectionName", "collection", "filter", "update"],
     },
   },
   {
@@ -86,13 +95,15 @@ export const mongoToolDefs: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        env: { type: "string" },
-        connection: { type: "string" },
+        connectionName: { type: "string" },
         collection: { type: "string" },
         filter: { type: "object" },
-        many: { type: "boolean", description: "If true, deleteMany; else deleteOne" },
+        many: {
+          type: "boolean",
+          description: "If true, deleteMany; else deleteOne",
+        },
       },
-      required: ["env", "connection", "collection", "filter"],
+      required: ["connectionName", "collection", "filter"],
     },
   },
   {
@@ -101,17 +112,16 @@ export const mongoToolDefs: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        env: { type: "string" },
-        connection: { type: "string" },
+        connectionName: { type: "string" },
       },
-      required: ["env", "connection"],
+      required: ["connectionName"],
     },
   },
 ];
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
-const Base = z.object({ env: z.string(), connection: z.string() });
+const Base = z.object({ connectionName: z.string() });
 
 const FindSchema = Base.extend({
   collection: z.string(),
@@ -145,28 +155,36 @@ const DeleteSchema = Base.extend({
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 const mongoFind: ToolHandler = async (args) => {
-  const { env, connection, collection, filter, options } = FindSchema.parse(args);
-  const adapter = await getAdapter(env, connection);
-  const result = await adapter.executeRaw("find", [collection, filter, options]);
+  const { connectionName, collection, filter, options } =
+    FindSchema.parse(args);
+  const adapter = await getAdapter(connectionName);
+  const result = await adapter.executeRaw("find", [
+    collection,
+    filter,
+    options,
+  ]);
   return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
 };
 
 const mongoAggregate: ToolHandler = async (args) => {
-  const { env, connection, collection, pipeline } = AggregateSchema.parse(args);
-  const adapter = await getAdapter(env, connection);
+  const { connectionName, collection, pipeline } = AggregateSchema.parse(args);
+  const adapter = await getAdapter(connectionName);
   const result = await adapter.executeRaw("aggregate", [collection, pipeline]);
   return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
 };
 
 const mongoInsert: ToolHandler = async (args) => {
-  const { env, connection, collection, documents } = InsertSchema.parse(args);
-  const adapter = await getAdapter(env, connection);
+  const { connectionName, collection, documents } = InsertSchema.parse(args);
+  const adapter = await getAdapter(connectionName);
   const operation = documents.length === 1 ? "insertOne" : "insertMany";
-  const params = documents.length === 1 ? [collection, documents[0]] : [collection, documents];
+  const params =
+    documents.length === 1
+      ? [collection, documents[0]]
+      : [collection, documents];
 
   const guard = applyGuardrails({
     environment: adapter.environment,
-    connectionName: connection,
+    connectionName: connectionName,
     dbKind: "mongodb",
     operation,
     params,
@@ -183,14 +201,15 @@ const mongoInsert: ToolHandler = async (args) => {
 };
 
 const mongoUpdate: ToolHandler = async (args) => {
-  const { env, connection, collection, filter, update, many } = UpdateSchema.parse(args);
-  const adapter = await getAdapter(env, connection);
+  const { connectionName, collection, filter, update, many } =
+    UpdateSchema.parse(args);
+  const adapter = await getAdapter(connectionName);
   const operation = many ? "updateMany" : "updateOne";
   const params = [collection, filter, update];
 
   const guard = applyGuardrails({
     environment: adapter.environment,
-    connectionName: connection,
+    connectionName: connectionName,
     dbKind: "mongodb",
     operation,
     params,
@@ -207,14 +226,14 @@ const mongoUpdate: ToolHandler = async (args) => {
 };
 
 const mongoDelete: ToolHandler = async (args) => {
-  const { env, connection, collection, filter, many } = DeleteSchema.parse(args);
-  const adapter = await getAdapter(env, connection);
+  const { connectionName, collection, filter, many } = DeleteSchema.parse(args);
+  const adapter = await getAdapter(connectionName);
   const operation = many ? "deleteMany" : "deleteOne";
   const params = [collection, filter];
 
   const guard = applyGuardrails({
     environment: adapter.environment,
-    connectionName: connection,
+    connectionName: connectionName,
     dbKind: "mongodb",
     operation,
     params,
@@ -231,8 +250,8 @@ const mongoDelete: ToolHandler = async (args) => {
 };
 
 const mongoListCollections: ToolHandler = async (args) => {
-  const { env, connection } = Base.parse(args);
-  const adapter = await getAdapter(env, connection);
+  const { connectionName } = Base.parse(args);
+  const adapter = await getAdapter(connectionName);
   const result = await adapter.executeRaw("listCollections", []);
   return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
 };

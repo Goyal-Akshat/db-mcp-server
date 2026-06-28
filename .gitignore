@@ -11,5 +11,7 @@ config/connections.json
 id_rsa
 id_ed25519
 
+config.json
+
 .env
 .env.local

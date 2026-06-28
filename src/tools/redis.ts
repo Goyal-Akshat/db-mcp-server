@@ -9,12 +9,12 @@ import { ToolHandler } from "./registry.js";
 export const redisToolDefs: Tool[] = [
   {
     name: "redis_get",
-    description: "Get the value of a Redis key (GET, HGETALL, LRANGE, SMEMBERS, ZRANGE).",
+    description:
+      "Get the value of a Redis key (GET, HGETALL, LRANGE, SMEMBERS, ZRANGE).",
     inputSchema: {
       type: "object",
       properties: {
-        env: { type: "string" },
-        connection: { type: "string" },
+        connectionName: { type: "string" },
         key: { type: "string" },
         type: {
           type: "string",
@@ -22,7 +22,7 @@ export const redisToolDefs: Tool[] = [
           description: "Redis data type — determines the fetch command used",
         },
       },
-      required: ["env", "connection", "key"],
+      required: ["connectionName", "key"],
     },
   },
   {
@@ -32,13 +32,12 @@ export const redisToolDefs: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        env: { type: "string" },
-        connection: { type: "string" },
+        connectionName: { type: "string" },
         key: { type: "string" },
         value: { type: "string" },
         exSeconds: { type: "number", description: "Optional TTL in seconds" },
       },
-      required: ["env", "connection", "key", "value"],
+      required: ["connectionName", "key", "value"],
     },
   },
   {
@@ -48,11 +47,10 @@ export const redisToolDefs: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        env: { type: "string" },
-        connection: { type: "string" },
+        connectionName: { type: "string" },
         keys: { type: "array", items: { type: "string" } },
       },
-      required: ["env", "connection", "keys"],
+      required: ["connectionName", "keys"],
     },
   },
   {
@@ -62,12 +60,14 @@ export const redisToolDefs: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        env: { type: "string" },
-        connection: { type: "string" },
+        connectionName: { type: "string" },
         pattern: { type: "string", description: "Glob pattern, e.g. 'user:*'" },
-        count: { type: "number", description: "Approximate results per SCAN iteration (default 100)" },
+        count: {
+          type: "number",
+          description: "Approximate results per SCAN iteration (default 100)",
+        },
       },
-      required: ["env", "connection", "pattern"],
+      required: ["connectionName", "pattern"],
     },
   },
   {
@@ -78,19 +78,21 @@ export const redisToolDefs: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        env: { type: "string" },
-        connection: { type: "string" },
-        command: { type: "string", description: "Redis command name, e.g. HSET" },
+        connectionName: { type: "string" },
+        command: {
+          type: "string",
+          description: "Redis command name, e.g. HSET",
+        },
         args: { type: "array", items: {}, description: "Command arguments" },
       },
-      required: ["env", "connection", "command"],
+      required: ["connectionName", "command"],
     },
   },
 ];
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
-const Base = z.object({ env: z.string(), connection: z.string() });
+const Base = z.object({ connectionName: z.string() });
 
 const GetSchema = Base.extend({
   key: z.string(),
@@ -128,22 +130,26 @@ const TYPE_CMD_MAP: Record<string, (key: string) => [string, unknown[]]> = {
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 const redisGet: ToolHandler = async (args) => {
-  const { env, connection, key, type } = GetSchema.parse(args);
-  const adapter = await getAdapter(env, connection);
+  const { connectionName, key, type } = GetSchema.parse(args);
+  const adapter = await getAdapter(connectionName);
   const [cmd, params] = TYPE_CMD_MAP[type](key);
   const result = await adapter.executeRaw(cmd, params);
-  return { content: [{ type: "text", text: JSON.stringify(result.raw ?? result, null, 2) }] };
+  return {
+    content: [
+      { type: "text", text: JSON.stringify(result.raw ?? result, null, 2) },
+    ],
+  };
 };
 
 const redisSet: ToolHandler = async (args) => {
-  const { env, connection, key, value, exSeconds } = SetSchema.parse(args);
-  const adapter = await getAdapter(env, connection);
+  const { connectionName, key, value, exSeconds } = SetSchema.parse(args);
+  const adapter = await getAdapter(connectionName);
   const params = exSeconds ? [key, exSeconds, value] : [key, value];
   const operation = exSeconds ? "setex" : "set";
 
   const guard = applyGuardrails({
     environment: adapter.environment,
-    connectionName: connection,
+    connectionName: connectionName,
     dbKind: "redis",
     operation,
     params,
@@ -156,16 +162,18 @@ const redisSet: ToolHandler = async (args) => {
   }
 
   const result = await adapter.executeRaw(operation, params);
-  return { content: [{ type: "text", text: JSON.stringify(result.raw, null, 2) }] };
+  return {
+    content: [{ type: "text", text: JSON.stringify(result.raw, null, 2) }],
+  };
 };
 
 const redisDel: ToolHandler = async (args) => {
-  const { env, connection, keys } = DelSchema.parse(args);
-  const adapter = await getAdapter(env, connection);
+  const { connectionName, keys } = DelSchema.parse(args);
+  const adapter = await getAdapter(connectionName);
 
   const guard = applyGuardrails({
     environment: adapter.environment,
-    connectionName: connection,
+    connectionName: connectionName,
     dbKind: "redis",
     operation: "del",
     params: keys,
@@ -177,18 +185,26 @@ const redisDel: ToolHandler = async (args) => {
   }
 
   const result = await adapter.executeRaw("del", keys);
-  return { content: [{ type: "text", text: JSON.stringify(result.raw, null, 2) }] };
+  return {
+    content: [{ type: "text", text: JSON.stringify(result.raw, null, 2) }],
+  };
 };
 
 const redisKeys: ToolHandler = async (args) => {
-  const { env, connection, pattern, count } = KeysSchema.parse(args);
-  const adapter = await getAdapter(env, connection);
+  const { connectionName, pattern, count } = KeysSchema.parse(args);
+  const adapter = await getAdapter(connectionName);
 
   // Use SCAN instead of KEYS for production safety
   const allKeys: string[] = [];
   let cursor = "0";
   do {
-    const result = await adapter.executeRaw("scan", [cursor, "MATCH", pattern, "COUNT", count]);
+    const result = await adapter.executeRaw("scan", [
+      cursor,
+      "MATCH",
+      pattern,
+      "COUNT",
+      count,
+    ]);
     const [nextCursor, keys] = result.raw as [string, string[]];
     cursor = nextCursor;
     allKeys.push(...keys);
@@ -196,17 +212,22 @@ const redisKeys: ToolHandler = async (args) => {
   } while (cursor !== "0");
 
   return {
-    content: [{ type: "text", text: JSON.stringify({ keys: allKeys, count: allKeys.length }, null, 2) }],
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({ keys: allKeys, count: allKeys.length }, null, 2),
+      },
+    ],
   };
 };
 
 const redisCommand: ToolHandler = async (args) => {
-  const { env, connection, command, args: cmdArgs } = CmdSchema.parse(args);
-  const adapter = await getAdapter(env, connection);
+  const { connectionName, command, args: cmdArgs } = CmdSchema.parse(args);
+  const adapter = await getAdapter(connectionName);
 
   const guard = applyGuardrails({
     environment: adapter.environment,
-    connectionName: connection,
+    connectionName: connectionName,
     dbKind: "redis",
     operation: command.toLowerCase(),
     params: cmdArgs,
@@ -218,7 +239,11 @@ const redisCommand: ToolHandler = async (args) => {
   }
 
   const result = await adapter.executeRaw(command.toLowerCase(), cmdArgs);
-  return { content: [{ type: "text", text: JSON.stringify(result.raw ?? result, null, 2) }] };
+  return {
+    content: [
+      { type: "text", text: JSON.stringify(result.raw ?? result, null, 2) },
+    ],
+  };
 };
 
 // ─── Export ───────────────────────────────────────────────────────────────────

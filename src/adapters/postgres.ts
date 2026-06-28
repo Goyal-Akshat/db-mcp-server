@@ -1,15 +1,15 @@
 import { Pool, PoolConfig } from "pg";
-import { BaseAdapter } from "./base.js";
-import { Environment, PostgresConnection, QueryResult } from "../types/index.js";
+import { DatabaseAdapter } from "./dbAdapter.js";
+import { Environment, PostgresConfig, QueryResult } from "../types/index.js";
 
-export class PostgresAdapter extends BaseAdapter {
+export class PostgresAdapter extends DatabaseAdapter {
   readonly kind = "postgres" as const;
   private pool: Pool | null = null;
 
   constructor(
     connectionName: string,
     environment: Environment,
-    private readonly config: PostgresConnection & { host: string; port: number }
+    private readonly config: PostgresConfig & { host: string; port: number },
   ) {
     super(connectionName, environment);
   }
@@ -48,7 +48,8 @@ export class PostgresAdapter extends BaseAdapter {
    * params[0]: array of bind parameters (optional)
    */
   async executeRaw(operation: string, params: unknown[]): Promise<QueryResult> {
-    if (!this.pool) throw new Error(`[postgres:${this.connectionName}] Not connected`);
+    if (!this.pool)
+      throw new Error(`[postgres:${this.connectionName}] Not connected`);
     const bindParams = (params[0] as unknown[]) ?? [];
     const result = await this.pool.query(operation, bindParams);
     return {
@@ -62,7 +63,7 @@ export class PostgresAdapter extends BaseAdapter {
     const result = await this.executeRaw(
       `SELECT table_name FROM information_schema.tables
        WHERE table_schema = 'public' ORDER BY table_name`,
-      []
+      [],
     );
     return (result.rows as { table_name: string }[]).map((r) => r.table_name);
   }
@@ -74,7 +75,7 @@ export class PostgresAdapter extends BaseAdapter {
        FROM information_schema.columns
        WHERE table_schema = 'public' AND table_name = $1
        ORDER BY ordinal_position`,
-      [[table]]
+      [[table]],
     );
   }
 }

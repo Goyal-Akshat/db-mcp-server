@@ -1,24 +1,29 @@
 export type Environment = "local" | "dev" | "prod";
 export type DbKind = "postgres" | "mongodb" | "redis";
 export type OperationClass = "read" | "write" | "dangerous";
+export type DBConfig = PostgresConfig | MongoConfig | RedisConfig;
 
-// ─── SSH config (required for dev/prod) ──────────────────────────────────────
+export interface Config {
+  connectionName: string;
+  environment: Environment;
+  kind: DbKind;
+  requireSsh: boolean;
+  sshConfig?: SshConfig;
+  dbConfig: DBConfig;
+}
 
 export interface SshConfig {
   host: string;
   port: number;
   username: string;
-  /** Path to private key file OR inline private key string */
   privateKey: string;
-  /** If the key is a file path (starts with / or ~), it will be read from disk */
-  privateKeyIsPath?: boolean;
+  privateKeyIsPath: boolean;
   passphrase?: string;
 }
 
 // ─── Per-database connection configs ─────────────────────────────────────────
 
-export interface PostgresConnection {
-  kind: "postgres";
+export interface PostgresConfig {
   host: string;
   port: number;
   database: string;
@@ -27,36 +32,17 @@ export interface PostgresConnection {
   ssl?: boolean;
 }
 
-export interface MongoConnection {
-  kind: "mongodb";
+export interface MongoConfig {
   uri: string; // full MongoDB URI, e.g. mongodb://user:pass@host:27017/db
   database: string;
 }
 
-export interface RedisConnection {
-  kind: "redis";
+export interface RedisConfig {
   host: string;
   port: number;
   password?: string;
   db?: number;
   tls?: boolean;
-}
-
-export type DatabaseConnection = PostgresConnection | MongoConnection | RedisConnection;
-
-// ─── Environment entry ────────────────────────────────────────────────────────
-
-export interface EnvironmentEntry {
-  environment: Environment;
-  /** SSH tunnel config — required when environment is dev or prod */
-  ssh?: SshConfig;
-  connections: Record<string, DatabaseConnection>;
-}
-
-// ─── Top-level config ─────────────────────────────────────────────────────────
-
-export interface AppConfig {
-  environments: Record<string, EnvironmentEntry>;
 }
 
 // ─── Adapter interface ────────────────────────────────────────────────────────
@@ -65,16 +51,6 @@ export interface QueryResult {
   rows?: unknown[];
   rowCount?: number;
   raw?: unknown;
-}
-
-export interface DatabaseAdapter {
-  readonly kind: DbKind;
-  readonly connectionName: string;
-  readonly environment: Environment;
-  connect(): Promise<void>;
-  disconnect(): Promise<void>;
-  ping(): Promise<boolean>;
-  executeRaw(operation: string, params: unknown[]): Promise<QueryResult>;
 }
 
 // ─── Guardrail types ──────────────────────────────────────────────────────────

@@ -16,8 +16,7 @@ export const postgresToolDefs: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        env: { type: "string", description: "Environment name" },
-        connection: { type: "string", description: "Connection name" },
+        connectionName: { type: "string", description: "Connection name" },
         sql: { type: "string", description: "SQL query to execute" },
         params: {
           type: "array",
@@ -25,19 +24,19 @@ export const postgresToolDefs: Tool[] = [
           items: {},
         },
       },
-      required: ["env", "connection", "sql"],
+      required: ["connectionName", "sql"],
     },
   },
   {
     name: "postgres_list_tables",
-    description: "List all tables in the public schema of a PostgreSQL database.",
+    description:
+      "List all tables in the public schema of a PostgreSQL database.",
     inputSchema: {
       type: "object",
       properties: {
-        env: { type: "string" },
-        connection: { type: "string" },
+        connectionName: { type: "string" },
       },
-      required: ["env", "connection"],
+      required: ["connectionName"],
     },
   },
   {
@@ -46,11 +45,10 @@ export const postgresToolDefs: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        env: { type: "string" },
-        connection: { type: "string" },
+        connectionName: { type: "string" },
         table: { type: "string", description: "Table name" },
       },
-      required: ["env", "connection", "table"],
+      required: ["connectionName", "table"],
     },
   },
 ];
@@ -58,29 +56,27 @@ export const postgresToolDefs: Tool[] = [
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
 const QuerySchema = z.object({
-  env: z.string(),
-  connection: z.string(),
+  connectionName: z.string(),
   sql: z.string(),
   params: z.array(z.unknown()).default([]),
 });
 
-const BasicSchema = z.object({ env: z.string(), connection: z.string() });
+const BasicSchema = z.object({ connectionName: z.string() });
 const TableSchema = BasicSchema.extend({ table: z.string() });
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 const postgresQuery: ToolHandler = async (args) => {
-  const { env, connection, sql, params } = QuerySchema.parse(args);
-  const adapter = await getAdapter(env, connection);
+  const { connectionName, sql, params } = QuerySchema.parse(args);
+  const adapter = await getAdapter(connectionName);
 
   const guard = applyGuardrails({
     environment: adapter.environment,
-    connectionName: connection,
+    connectionName: connectionName,
     dbKind: "postgres",
     operation: sql,
     params: [params],
-    previewFn: () =>
-      `SQL: ${sql}\nParams: ${JSON.stringify(params)}`,
+    previewFn: () => `SQL: ${sql}\nParams: ${JSON.stringify(params)}`,
   });
 
   if (!guard.allowed) {
@@ -92,15 +88,15 @@ const postgresQuery: ToolHandler = async (args) => {
 };
 
 const postgresListTables: ToolHandler = async (args) => {
-  const { env, connection } = BasicSchema.parse(args);
-  const adapter = (await getAdapter(env, connection)) as PostgresAdapter;
+  const { connectionName } = BasicSchema.parse(args);
+  const adapter = (await getAdapter(connectionName)) as PostgresAdapter;
   const tables = await adapter.listTables();
   return { content: [{ type: "text", text: JSON.stringify(tables, null, 2) }] };
 };
 
 const postgresDescribeTable: ToolHandler = async (args) => {
-  const { env, connection, table } = TableSchema.parse(args);
-  const adapter = (await getAdapter(env, connection)) as PostgresAdapter;
+  const { connectionName, table } = TableSchema.parse(args);
+  const adapter = (await getAdapter(connectionName)) as PostgresAdapter;
   const result = await adapter.describeTable(table);
   return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
 };

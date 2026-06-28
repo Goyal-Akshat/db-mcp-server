@@ -1,7 +1,5 @@
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { getEnvironmentNames } from "../config/index.js";
-import { listAdapters } from "../adapters/registry.js";
 import {
   cancelPendingOperation,
   listPendingOperations,
@@ -9,26 +7,30 @@ import {
 } from "../guardrails/confirmation.js";
 import { getAdapter } from "../adapters/registry.js";
 import { ToolHandler } from "./registry.js";
+import { getAvailableConfigs } from "../config/index.js";
 
 // ─── Tool definitions ─────────────────────────────────────────────────────────
 
 export const commonToolDefs: Tool[] = [
   {
-    name: "list_environments",
+    name: "list_available_connections",
     description:
-      "List all configured environments (local, dev, prod) and their available database connections.",
+      "List all configured connections with connection name its environment (local, dev, prod) and its kind (postgres, redis, mongo).",
     inputSchema: { type: "object", properties: {}, required: [] },
   },
   {
     name: "ping_connection",
-    description: "Ping a specific database connection to check if it is reachable.",
+    description:
+      "Ping a specific database connection to check if it is reachable.",
     inputSchema: {
       type: "object",
       properties: {
-        env: { type: "string", description: "Environment name (e.g. local, dev, prod)" },
-        connection: { type: "string", description: "Connection name within that environment" },
+        connectionName: {
+          type: "string",
+          description: "Connection name",
+        },
       },
-      required: ["env", "connection"],
+      required: ["connectionName"],
     },
   },
   {
@@ -39,7 +41,10 @@ export const commonToolDefs: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        token: { type: "string", description: "The confirmation token from the pending operation" },
+        token: {
+          type: "string",
+          description: "The confirmation token from the pending operation",
+        },
       },
       required: ["token"],
     },
@@ -64,34 +69,26 @@ export const commonToolDefs: Tool[] = [
 
 // ─── Tool handlers ────────────────────────────────────────────────────────────
 
-const listEnvironments: ToolHandler = async () => {
-  const { loadConfig } = await import("../config/index.js");
-  const config = loadConfig();
-  const envs = Object.entries(config.environments).map(([name, entry]) => ({
-    name,
-    environment: entry.environment,
-    connections: Object.entries(entry.connections).map(([cname, conn]) => ({
-      name: cname,
-      kind: conn.kind,
-    })),
-    sshEnabled: !!entry.ssh,
-  }));
-  return { content: [{ type: "text", text: JSON.stringify(envs, null, 2) }] };
+const listAvailableConfigs: ToolHandler = async () => {
+  const configs = getAvailableConfigs();
+  return {
+    content: [{ type: "text", text: JSON.stringify(configs, null, 2) }],
+  };
 };
 
-const PingSchema = z.object({ env: z.string(), connection: z.string() });
+const PingSchema = z.object({ connectionName: z.string() });
 
 const pingConnection: ToolHandler = async (args) => {
-  const { env, connection } = PingSchema.parse(args);
-  const adapter = await getAdapter(env, connection);
+  const { connectionName } = PingSchema.parse(args);
+  const adapter = await getAdapter(connectionName);
   const ok = await adapter.ping();
   return {
     content: [
       {
         type: "text",
         text: ok
-          ? `✓ ${env}/${connection} (${adapter.kind}) is reachable`
-          : `✗ ${env}/${connection} (${adapter.kind}) did NOT respond`,
+          ? `✓ ConnectionName: ${connectionName} Environment: ${adapter.environment} Kind: ${adapter.kind} is reachable`
+          : `✗ ${connectionName} Environment: ${adapter.environment} Kind: ${adapter.kind} did NOT respond`,
       },
     ],
   };
@@ -103,9 +100,7 @@ const confirmOperation: ToolHandler = async (args) => {
   const { token } = ConfirmSchema.parse(args);
   const op = resolvePendingOperation(token);
   const adapter = await getAdapter(
-    // The adapter key is "envName/connectionName" — we stored connectionName; look up by kind+name
-    findEnvNameForConnection(op.connectionName, op.environment),
-    op.connectionName
+    op.connectionName,
   );
   const result = await adapter.executeRaw(op.operation, op.params);
   return {
@@ -120,7 +115,9 @@ const cancelOperation: ToolHandler = async (args) => {
     content: [
       {
         type: "text",
-        text: removed ? `Operation ${token} cancelled.` : `No pending operation with token ${token}.`,
+        text: removed
+          ? `Operation ${token} cancelled.`
+          : `No pending operation with token ${token}.`,
       },
     ],
   };
@@ -134,21 +131,10 @@ const listPending: ToolHandler = async () => {
   return { content: [{ type: "text", text: JSON.stringify(ops, null, 2) }] };
 };
 
-// ─── Helper ───────────────────────────────────────────────────────────────────
-
-function findEnvNameForConnection(connectionName: string, environment: string): string {
-  const adapters = listAdapters();
-  const match = adapters.find(
-    (a) => a.key.endsWith(`/${connectionName}`) && a.environment === environment
-  );
-  if (!match) throw new Error(`Cannot resolve env name for connection "${connectionName}"`);
-  return match.key.split("/")[0];
-}
-
 // ─── Export handler map ───────────────────────────────────────────────────────
 
 export const commonHandlers: Record<string, ToolHandler> = {
-  list_environments: listEnvironments,
+  list_available_configs: listAvailableConfigs,
   ping_connection: pingConnection,
   confirm_operation: confirmOperation,
   cancel_operation: cancelOperation,

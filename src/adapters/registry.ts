@@ -1,6 +1,14 @@
-import { getEnvironmentEntry } from "../config/index.js";
+import { getAvailableConfigs, getConfig } from "../config/index.js";
 import { openTunnel } from "../tunnel/manager.js";
-import { DatabaseAdapter, DatabaseConnection, Environment } from "../types/index.js";
+import {
+  Config,
+  DbKind,
+  Environment,
+  MongoConfig,
+  PostgresConfig,
+  RedisConfig,
+} from "../types/index.js";
+import { DatabaseAdapter } from "./dbAdapter.js";
 import { MongoAdapter } from "./mongodb.js";
 import { PostgresAdapter } from "./postgres.js";
 import { RedisAdapter } from "./redis.js";
@@ -8,58 +16,63 @@ import { RedisAdapter } from "./redis.js";
 /** Live adapter instances, keyed by "envName/connectionName" */
 const adapters = new Map<string, DatabaseAdapter>();
 
-function adapterKey(envName: string, connectionName: string): string {
-  return `${envName}/${connectionName}`;
-}
-
 /**
  * Builds a connected adapter for the given env + connection.
  * For dev/prod, rewrites host/port to go through an SSH tunnel first.
  */
-async function buildAdapter(
-  envName: string,
-  connectionName: string,
-  conn: DatabaseConnection,
-  entry: ReturnType<typeof getEnvironmentEntry>
-): Promise<DatabaseAdapter> {
-  const environment: Environment = entry.environment;
-  const needsTunnel = environment !== "local";
-  const ssh = entry.ssh;
-
-  switch (conn.kind) {
+async function buildAdapter(config: Config): Promise<DatabaseAdapter> {
+  const requireSsh = config.requireSsh;
+  const sshConfig = config.sshConfig;
+  switch (config.kind) {
     case "postgres": {
-      let host = conn.host;
-      let port = conn.port;
-      if (needsTunnel && ssh) {
-        port = await openTunnel(ssh, conn.host, conn.port);
+      const dbConfig = config.dbConfig as PostgresConfig;
+      let host = dbConfig.host;
+      let port = dbConfig.port;
+      if (requireSsh && sshConfig) {
+        port = await openTunnel(sshConfig, dbConfig.host, dbConfig.port);
         host = "127.0.0.1";
       }
-      return new PostgresAdapter(connectionName, environment, { ...conn, host, port });
+      return new PostgresAdapter(config.connectionName, config.environment, {
+        ...dbConfig,
+        host,
+        port,
+      });
     }
 
     case "mongodb": {
-      let uri = conn.uri;
-      if (needsTunnel && ssh) {
-        const url = new URL(conn.uri);
+      const dbConfig = config.dbConfig as MongoConfig;
+      let uri = dbConfig.uri;
+      if (requireSsh && sshConfig) {
+        const url = new URL(dbConfig.uri);
         const remoteHost = url.hostname;
         const remotePort = parseInt(url.port || "27017", 10);
-        const localPort = await openTunnel(ssh, remoteHost, remotePort);
+        const localPort = await openTunnel(sshConfig, remoteHost, remotePort);
         url.hostname = "127.0.0.1";
         url.port = String(localPort);
         uri = url.toString();
       }
-      return new MongoAdapter(connectionName, environment, { ...conn, uri });
+      return new MongoAdapter(config.connectionName, config.environment, {
+        ...dbConfig,
+        uri,
+      });
     }
 
     case "redis": {
-      let host = conn.host;
-      let port = conn.port;
-      if (needsTunnel && ssh) {
-        port = await openTunnel(ssh, conn.host, conn.port);
+      const dbConfig = config.dbConfig as RedisConfig;
+      let host = dbConfig.host;
+      let port = dbConfig.port;
+      if (requireSsh && sshConfig) {
+        port = await openTunnel(sshConfig, dbConfig.host, dbConfig.port);
         host = "127.0.0.1";
       }
-      return new RedisAdapter(connectionName, environment, { ...conn, host, port });
+      return new RedisAdapter(config.connectionName, config.environment, {
+        ...dbConfig,
+        host,
+        port,
+      });
     }
+    default:
+      throw new Error(`Unknown Database Type : ${config.kind}`);
   }
 }
 
@@ -67,24 +80,21 @@ async function buildAdapter(
  * Returns (and lazily connects) an adapter for the given env + connection.
  */
 export async function getAdapter(
-  envName: string,
-  connectionName: string
+  connectionName: string,
 ): Promise<DatabaseAdapter> {
-  const key = adapterKey(envName, connectionName);
-  if (adapters.has(key)) return adapters.get(key)!;
+  if (adapters.has(connectionName)) return adapters.get(connectionName)!;
 
-  const entry = getEnvironmentEntry(envName);
-  const conn = entry.connections[connectionName];
-  if (!conn) {
+  const config = getConfig(connectionName);
+  if (!config) {
     throw new Error(
-      `Unknown connection "${connectionName}" in environment "${envName}". ` +
-        `Available: ${Object.keys(entry.connections).join(", ")}`
+      `Unknown connection "${connectionName}"` +
+        `Available: ${getAvailableConfigs()}`,
     );
   }
 
-  const adapter = await buildAdapter(envName, connectionName, conn, entry);
+  const adapter = await buildAdapter(config);
   await adapter.connect();
-  adapters.set(key, adapter);
+  adapters.set(connectionName, adapter);
   return adapter;
 }
 
@@ -92,23 +102,32 @@ export async function getAdapter(
  * Eagerly connects all connections in an environment.
  * Useful for startup validation; errors are logged but non-fatal.
  */
-export async function connectAll(envName: string): Promise<void> {
-  const entry = getEnvironmentEntry(envName);
-  for (const connName of Object.keys(entry.connections)) {
+export async function connectAll(): Promise<void> {
+  const availableConnections = getAvailableConfigs();
+  for (const conn of availableConnections) {
     try {
-      await getAdapter(envName, connName);
-      console.error(`[registry] Connected ${envName}/${connName}`);
+      await getAdapter(conn.connectionName);
+      console.error(
+        `[registry] Connected ConnectionName: ${conn.connectionName} Environment: ${conn.environment} Kind: ${conn.kind}`,
+      );
     } catch (err) {
-      console.error(`[registry] Failed to connect ${envName}/${connName}:`, err);
+      console.error(
+        `[registry] Failed to connect ConnectionName: ${conn.connectionName} Environment: ${conn.environment} Kind: ${conn.kind}`,
+        err,
+      );
     }
   }
 }
 
-export function listAdapters(): Array<{ key: string; kind: string; environment: string }> {
+export function listAdapters(): Array<{
+  connectionName: string;
+  environment: Environment;
+  kind: DbKind;
+}> {
   return [...adapters.entries()].map(([key, a]) => ({
-    key,
-    kind: a.kind,
+    connectionName: key,
     environment: a.environment,
+    kind: a.kind,
   }));
 }
 

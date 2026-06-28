@@ -1,15 +1,15 @@
 import Redis, { RedisOptions } from "ioredis";
-import { BaseAdapter } from "./base.js";
-import { Environment, RedisConnection, QueryResult } from "../types/index.js";
+import { Environment, QueryResult, RedisConfig } from "../types/index.js";
+import { DatabaseAdapter } from "./dbAdapter.js";
 
-export class RedisAdapter extends BaseAdapter {
+export class RedisAdapter extends DatabaseAdapter {
   readonly kind = "redis" as const;
   private client: Redis | null = null;
 
   constructor(
     connectionName: string,
     environment: Environment,
-    private readonly config: RedisConnection & { host: string; port: number }
+    private readonly config: RedisConfig & { host: string; port: number },
   ) {
     super(connectionName, environment);
   }
@@ -49,18 +49,22 @@ export class RedisAdapter extends BaseAdapter {
    * Any valid Redis command can be issued this way.
    */
   async executeRaw(operation: string, params: unknown[]): Promise<QueryResult> {
-    if (!this.client) throw new Error(`[redis:${this.connectionName}] Not connected`);
+    if (!this.client)
+      throw new Error(`[redis:${this.connectionName}] Not connected`);
 
     const cmd = operation.toUpperCase();
     // ioredis accepts dynamic command via .call()
-    const result = await (this.client as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>)[
-      cmd.toLowerCase()
-    ]?.(...params);
+    const result = await (
+      this.client as unknown as Record<
+        string,
+        (...a: unknown[]) => Promise<unknown>
+      >
+    )[cmd.toLowerCase()]?.(...params);
 
     if (result === undefined) {
       // Fallback: use sendCommand for commands not directly on the client
       const raw = await this.client.sendCommand(
-        new Redis.Command(cmd, params as (string | number | Buffer)[])
+        new Redis.Command(cmd, params as (string | number | Buffer)[]),
       );
       return { raw };
     }
