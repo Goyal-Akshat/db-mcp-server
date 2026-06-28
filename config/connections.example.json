@@ -1,94 +1,87 @@
-{
-  "environments": {
-    "local": {
-      "environment": "local",
-      "connections": {
-        "main-postgres": {
-          "kind": "postgres",
-          "host": "127.0.0.1",
-          "port": 5432,
-          "database": "myapp_dev",
-          "user": "postgres",
-          "password": "password",
-          "ssl": false
-        },
-        "main-mongo": {
-          "kind": "mongodb",
-          "uri": "mongodb://localhost:27017/myapp",
-          "database": "myapp"
-        },
-        "cache": {
-          "kind": "redis",
-          "host": "127.0.0.1",
-          "port": 6379
-        }
-      }
+[
+  {
+    "connectionName": "local-postgres",
+    "environment": "local",
+    "kind": "postgres",
+    "requireSsh": false,
+    "dbConfig": {
+      "host": "localhost",
+      "port": 5432,
+      "database": "goyal_kirana",
+      "user": "postgres",
+      "password": "postgres",
+      "ssl": false
+    }
+  },
+  {
+    "connectionName": "dev-postgres",
+    "environment": "dev",
+    "kind": "postgres",
+    "requireSsh": true,
+    "sshConfig": {
+      "host": "13.235.10.100",
+      "port": 22,
+      "username": "ubuntu",
+      "privateKey": "/Users/popla/.ssh/id_ed25519",
+      "privateKeyIsPath": true
     },
-    "dev": {
-      "environment": "dev",
-      "ssh": {
-        "host": "dev-bastion.example.com",
-        "port": 22,
-        "username": "ubuntu",
-        "privateKey": "~/.ssh/dev_bastion_key",
-        "privateKeyIsPath": true
-      },
-      "connections": {
-        "main-postgres": {
-          "kind": "postgres",
-          "host": "dev-rds.internal.example.com",
-          "port": 5432,
-          "database": "myapp_dev",
-          "user": "myapp_user",
-          "password": "CHANGE_ME",
-          "ssl": true
-        },
-        "main-mongo": {
-          "kind": "mongodb",
-          "uri": "mongodb://myapp_user:CHANGE_ME@dev-mongo.internal.example.com:27017/myapp",
-          "database": "myapp"
-        },
-        "cache": {
-          "kind": "redis",
-          "host": "dev-redis.internal.example.com",
-          "port": 6379,
-          "password": "CHANGE_ME",
-          "tls": true
-        }
-      }
+    "dbConfig": {
+      "host": "localhost",
+      "port": 5432,
+      "database": "goyal_kirana_dev",
+      "user": "postgres",
+      "password": "secret",
+      "ssl": false
+    }
+  },
+  {
+    "connectionName": "prod-mongo",
+    "environment": "prod",
+    "kind": "mongo",
+    "requireSsh": true,
+    "sshConfig": {
+      "host": "52.66.100.200",
+      "port": 22,
+      "username": "ubuntu",
+      "privateKey": "/Users/popla/.ssh/id_ed25519",
+      "privateKeyIsPath": true,
+      "passphrase": "my-passphrase"
     },
-    "prod": {
-      "environment": "prod",
-      "ssh": {
-        "host": "prod-bastion.example.com",
-        "port": 22,
-        "username": "ubuntu",
-        "privateKey": "~/.ssh/prod_bastion_key",
-        "privateKeyIsPath": true
-      },
-      "connections": {
-        "main-postgres": {
-          "kind": "postgres",
-          "host": "prod-rds.internal.example.com",
-          "port": 5432,
-          "database": "myapp_prod",
-          "user": "myapp_user",
-          "password": "CHANGE_ME",
-          "ssl": true
-        },
-        "main-mongo": {
-          "kind": "mongodb",
-          "uri": "mongodb://myapp_user:CHANGE_ME@prod-mongo.internal.example.com:27017/myapp",
-          "database": "myapp"
-        },
-        "cache": {
-          "kind": "redis",
-          "host": "prod-redis.internal.example.com",
-          "port": 6379,
-          "password": "CHANGE_ME",
-          "tls": true
-        }
-      }
+    "dbConfig": {
+      "uri": "mongodb://localhost:27017",
+      "database": "goyal_kirana"
+    }
+  },
+  {
+    "connectionName": "local-redis",
+    "environment": "local",
+    "kind": "redis",
+    "requireSsh": false,
+    "dbConfig": {
+      "host": "localhost",
+      "port": 6379,
+      "db": 0,
+      "tls": false
+    }
+  },
+  {
+    "connectionName": "prod-redis",
+    "environment": "prod",
+    "kind": "redis",
+    "requireSsh": true,
+    "sshConfig": {
+      "host": "18.60.20.30",
+      "port": 22,
+      "username": "ubuntu",
+      "privateKey": "/Users/popla/.ssh/id_ed25519",
+      "privateKeyIsPath": true
+    },
+    "dbConfig": {
+      "host": "localhost",
+      "port": 6379,
+      "password": "redis-password",
+      "db": 1,
+      "tls": true
     }
   }
-}
+]
