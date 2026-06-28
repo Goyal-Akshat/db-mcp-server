@@ -13,7 +13,7 @@ import { getAvailableConfigs } from "../config/index.js";
 
 export const commonToolDefs: Tool[] = [
   {
-    name: "list_available_connections",
+    name: "list_available_configs",
     description:
       "List all configured connections with connection name its environment (local, dev, prod) and its kind (postgres, redis, mongo).",
     inputSchema: { type: "object", properties: {}, required: [] },
