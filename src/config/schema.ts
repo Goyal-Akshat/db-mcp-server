@@ -44,7 +44,7 @@ const ConfigSchema = z.discriminatedUnion("kind", [
   z.object({
     connectionName: z.string(),
     environment: z.enum(["local", "dev", "prod"]),
-    kind: z.literal("mongo"),
+    kind: z.literal("mongodb"),
     requireSsh: z.boolean().default(false),
     sshConfig: SshConfigSchema.optional(),
     dbConfig: MongoConnectionSchema,

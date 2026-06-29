@@ -37,7 +37,7 @@
   {
     "connectionName": "prod-mongo",
     "environment": "prod",
-    "kind": "mongo",
+    "kind": "mongodb",
     "requireSsh": true,
     "sshConfig": {
       "host": "52.66.100.200",
